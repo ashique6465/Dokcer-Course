@@ -15,6 +15,13 @@ RUN npm ci --only=production && npm cache clean --force
 # Copy source code
 COPY . .
 
+
+#create a user with perissions to run the app
+# -s --> crate a system user 
+# -G --> add the user to the group
+# This is done to avoid running the app as root 
+# If the app is run as root, any vulnerability in the app can be exploited to gain access to the host system
+# It's a good practice to run the app as a non-root user
 # Create non-root user for security
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001
