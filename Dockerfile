@@ -1,49 +1,38 @@
-# Multi-stage Dockerfile for Node.js acquisitions application
-
-# Base image with Node.js
+# --- Base stage ---
 FROM node:18-alpine AS base
 
-# Set working directory
 WORKDIR /app
 
-# Copy package files
+# Copy package files and npmrc if present
 COPY package*.json ./
+COPY .npmrc* ./
 
 # Install dependencies
-RUN npm ci --only=production && npm cache clean --force
+RUN apk add --no-cache python3 make g++ \
+    && npm ci --only=production --unsafe-perm \
+    && npm cache clean --force \
+    && apk del python3 make g++
 
 # Copy source code
 COPY . .
 
-
-#create a user with perissions to run the app
-# -s --> crate a system user 
-# -G --> add the user to the group
-# This is done to avoid running the app as root 
-# If the app is run as root, any vulnerability in the app can be exploited to gain access to the host system
-# It's a good practice to run the app as a non-root user
-# Create non-root user for security
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
-
-# Change ownership of the app directory
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
 RUN chown -R nodejs:nodejs /app
 USER nodejs
 
-# Expose the port
 EXPOSE 3000
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD node -e "require('http').get('http://localhost:3000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) }).on('error', () => { process.exit(1) })"
 
-# Development stage
+# --- Development stage ---
 FROM base AS development
 USER root
-RUN npm ci && npm cache clean --force
+RUN npm ci --unsafe-perm && npm cache clean --force
 USER nodejs
 CMD ["npm", "run", "dev"]
 
-# Production stage
+# --- Production stage ---
 FROM base AS production
 CMD ["npm", "start"]
